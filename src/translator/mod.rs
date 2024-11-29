@@ -1,7 +1,11 @@
-#![allow(unused)]
+use imp::Translator;
 
 use crate::ast;
 
-pub fn translate(_: ast::File) -> anyhow::Result<String> {
-    todo!()
+mod imp;
+
+type Code = String;
+
+pub fn translate(file: ast::File) -> anyhow::Result<Code> {
+    Translator::new().codegen(&file)
 }
