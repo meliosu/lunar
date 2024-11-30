@@ -1,0 +1,16 @@
+import c_add(int a, int b, int c);
+import c_mul(float c, value A, name B);
+
+sub hello() {
+    print(10);
+}
+
+sub main() {
+    if x {
+        c_add(x, x + 1, x * 2);
+    }
+
+    for y in 1..1024 * 1024 {
+        c_mul(y, y - 2, y / 2);
+    }
+}
