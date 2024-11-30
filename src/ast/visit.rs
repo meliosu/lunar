@@ -421,8 +421,8 @@ where
         Type::Long => visit.visit_type_long(),
         Type::Float => visit.visit_type_float(),
         Type::Double => visit.visit_type_double(),
-        Type::Value => todo!(),
-        Type::Name => todo!(),
+        Type::Value => visit.visit_type_value(),
+        Type::Name => visit.visit_type_name(),
     }
 }
 

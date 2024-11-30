@@ -3,7 +3,11 @@ use logos::Logos;
 
 pub fn lex(source: &str) -> anyhow::Result<Vec<Token>> {
     Token::lexer(source).try_fold(Vec::new(), |mut acc, token| {
-        acc.push(token.map_err(|e| anyhow!("{e}"))?);
+        let token = token.map_err(|e| anyhow!("lexer: {e}"))?;
+
+        dbg!(&token);
+
+        acc.push(token);
         Ok(acc)
     })
 }
@@ -117,9 +121,9 @@ pub enum Token {
     #[regex(r"[a-zA-Z_][a-zA-Z0-9_]*", |lex| lex.slice().to_owned())]
     Ident(String),
 
-    #[regex(r"0|[1-9][0-9]*", |lex| lex.slice().parse::<i64>().unwrap())]
+    #[regex(r"(0|[1-9][0-9]*)", |lex| lex.slice().parse::<i64>().unwrap())]
     Integer(i64),
 
-    #[regex(r"(0|[1-9][0-9]*)[.][0-9]*", |lex| lex.slice().parse::<f64>().unwrap())]
+    #[regex(r"(0|[1-9][0-9]*)[.][0-9]+", |lex| lex.slice().parse::<f64>().unwrap())]
     Real(f64),
 }

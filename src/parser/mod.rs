@@ -14,7 +14,7 @@ pub fn parse(input: Vec<Token>) -> anyhow::Result<File> {
                 .map(|e| format!("at {:?}", e.span()))
                 .collect();
 
-            bail!("{error}");
+            bail!("parser: {error}");
         }
     }
 }
@@ -26,7 +26,7 @@ fn file() -> impl Parser<Token, File, Error = Cheap<Token>> {
         .map(|items| File { items })
 }
 
-fn ident() -> impl Parser<Token, Ident, Error = Cheap<Token>> {
+fn ident() -> impl Parser<Token, Ident, Error = Cheap<Token>> + Clone {
     select! {
         Token::Ident(ident) => Ident { ident }
     }
@@ -63,7 +63,8 @@ fn import() -> impl Parser<Token, ItemImport, Error = Cheap<Token>> {
 }
 
 fn sub() -> impl Parser<Token, ItemSub, Error = Cheap<Token>> {
-    signature()
+    just(Token::KwSub)
+        .ignore_then(signature())
         .then(block())
         .map(|(signature, block)| ItemSub { signature, block })
 }
@@ -185,7 +186,10 @@ fn expr() -> impl Parser<Token, Expr, Error = Cheap<Token>> + Clone {
             Token::Real(real) => Expr::Number(Number::Real(real)),
         };
 
-        let atom = number.or(expr.delimited_by(just(Token::Lparen), just(Token::Rparen)));
+        let atom = ident()
+            .map(Expr::Ident)
+            .or(number)
+            .or(expr.delimited_by(just(Token::Lparen), just(Token::Rparen)));
 
         let unary = just(Token::Sub)
             .repeated()

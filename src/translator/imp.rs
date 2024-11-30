@@ -6,6 +6,7 @@ use std::hash::Hash;
 use std::fmt::Write;
 
 use anyhow::bail;
+use chumsky::chain::Chain;
 
 use crate::ast::visit::Visit;
 use crate::ast::{visit, Condition, Expr, Relation};
@@ -59,8 +60,25 @@ impl Translator {
 
         write!(&mut out, "{}", include_str!("../../c/runtime.h"))?;
 
-        for (_, block) in &self.blocks {
-            write!(&mut out, "{}", block.args_struct()?)?;
+        for (name, import) in &self.imports {
+            write!(&mut out, "void {name}(")?;
+
+            for (i, param) in import.params.iter().enumerate() {
+                match param.ty {
+                    Type::Int => write!(&mut out, "int")?,
+                    Type::Long => write!(&mut out, "long")?,
+                    Type::Float => write!(&mut out, "float")?,
+                    Type::Double => write!(&mut out, "double")?,
+                    Type::Value => write!(&mut out, "DF*")?,
+                    Type::Name => write!(&mut out, "DF*")?,
+                }
+
+                if i < import.params.len() - 1 {
+                    write!(&mut out, ",")?;
+                }
+            }
+
+            write!(&mut out, ");")?;
         }
 
         for (_, block) in self.blocks {
@@ -234,7 +252,7 @@ impl Block {
     }
 
     fn signature(&self) -> anyhow::Result<Code> {
-        let mut out = String::new();
+        let mut out = Code::new();
 
         write!(&mut out, "RET block_{}(CF *self)", self.id)?;
 
@@ -242,7 +260,7 @@ impl Block {
     }
 
     fn prelude(&self) -> anyhow::Result<Code> {
-        let mut out = String::new();
+        let mut out = Code::new();
 
         write!(
             &mut out,
@@ -254,7 +272,140 @@ impl Block {
     }
 
     fn code(&self) -> anyhow::Result<Code> {
-        todo!()
+        let mut out = Code::new();
+
+        let mut children = Vec::new();
+
+        write!(&mut out, "{}", self.signature()?)?;
+        write!(&mut out, "{{")?;
+        write!(&mut out, "{}", self.prelude()?)?;
+
+        for (name, ty) in &self.dependencies {
+            match ty {
+                Type::Value => {
+                    write!(
+                        &mut out,
+                        "if (request(self, &context->{name})) {{ return WAIT; }}"
+                    )?;
+                }
+
+                _ => {}
+            }
+        }
+
+        match self.kind {
+            BlockKind::Fork(ref block_fork) => {
+                for child in &block_fork.children {
+                    children.push(child.clone());
+
+                    write!(&mut out, "{{")?;
+
+                    write!(
+                        &mut out,
+                        "block_{}_context *child = malloc(sizeof(*child));",
+                        child.id
+                    )?;
+
+                    write!(&mut out, "spawn(self, block_{}, child)", child.id)?;
+
+                    write!(&mut out, "}}")?;
+                }
+            }
+
+            BlockKind::For(ref block_for) => {
+                children.push(*block_for.child.clone());
+
+                write!(
+                    &mut out,
+                    "for (int {index}={lower}; i<{upper}; {index}++)",
+                    index = block_for.index,
+                    lower = codegen_expr(block_for.lower.clone(), &self.dependencies)?,
+                    upper = codegen_expr(block_for.upper.clone(), &self.dependencies)?
+                )?;
+
+                let child = &block_for.child;
+
+                write!(&mut out, "{{")?;
+
+                write!(
+                    &mut out,
+                    "block_{}_context *child = malloc(sizeof(*child));",
+                    child.id
+                )?;
+
+                write!(&mut out, "spawn(self, block_{}, child)", child.id)?;
+
+                write!(&mut out, "}}")?;
+            }
+
+            BlockKind::If(ref block_if) => {
+                children.push(*block_if.then.clone());
+
+                write!(
+                    &mut out,
+                    "if ({})",
+                    codegen_cond(block_if.cond.clone(), &self.dependencies)?
+                )?;
+
+                write!(&mut out, "{{")?;
+
+                write!(
+                    &mut out,
+                    "block_{}_context *child = malloc(sizeof(*child));",
+                    block_if.then.id,
+                )?;
+
+                write!(&mut out, "spawn(self, block_{}, child);", block_if.then.id)?;
+
+                write!(&mut out, "}}")?;
+
+                if let Some(ref block_else) = block_if.else_ {
+                    children.push(*block_else.clone());
+
+                    write!(&mut out, "else {{")?;
+
+                    write!(
+                        &mut out,
+                        "block_{}_context *child = malloc(sizeof(*child));",
+                        block_else.id
+                    )?;
+
+                    write!(&mut out, "spawn(self, block_{}, child);", block_else.id)?;
+
+                    write!(&mut out, "}}")?;
+                }
+            }
+
+            BlockKind::Call(ref block_call) => {
+                let call = &block_call.call;
+
+                write!(&mut out, "{}(", call.ident.ident)?;
+
+                for (i, arg) in call.args.iter().enumerate() {
+                    write!(
+                        &mut out,
+                        "{}",
+                        codegen_expr(arg.clone(), &self.dependencies)?
+                    )?;
+
+                    if i < call.args.len() - 1 {
+                        write!(&mut out, ",")?;
+                    }
+                }
+
+                write!(&mut out, ");")?;
+            }
+        }
+
+        write!(&mut out, "return EXIT;")?;
+
+        write!(&mut out, "}}")?;
+
+        for child in children {
+            write!(&mut out, "{}", child.code()?)?;
+        }
+
+        Ok(out)
     }
 }
 
@@ -283,7 +434,11 @@ impl<'a> BlockTranslator<'a> {
 
         for stmt in &block.stmts {
             match stmt {
-                ast::Stmt::Decl(decl) => todo!(),
+                ast::Stmt::Decl(decl) => {
+                    for variable in &decl.vars {
+                        self.types.insert(variable.ident.clone(), Type::Value);
+                    }
+                }
                 ast::Stmt::Call(call) => {
                     children.push(self.fold_call(call)?);
                 }
