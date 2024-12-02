@@ -14,6 +14,9 @@ pub enum Error {
 
     #[error("parser")]
     Parser(#[from] ParserError),
+
+    #[error("translator")]
+    Translator(#[from] TranslatorError),
 }
 
 #[derive(Error, Debug)]
@@ -26,4 +29,10 @@ pub struct LexerError {
 #[error("at ?")]
 pub struct ParserError {
     pub errors: Vec<Simple<Token>>,
+}
+
+#[derive(Error, Debug)]
+#[error("?")]
+pub struct TranslatorError {
+    pub errors: Vec<anyhow::Error>,
 }
