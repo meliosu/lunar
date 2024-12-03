@@ -43,8 +43,8 @@ pub struct Ident {
 pub enum Type {
     Int,
     Float,
-    Value,
-    Name,
+    Input,
+    Output,
 }
 
 #[derive(Debug, Clone)]

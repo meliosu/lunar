@@ -151,8 +151,8 @@ fn ty() -> impl Parse<Type> + Clone {
     select! {
         Token::TyInt => Type::Int,
         Token::TyFloat => Type::Float,
-        Token::TyName => Type::Name,
-        Token::TyValue => Type::Value,
+        Token::TyOutput => Type::Output,
+        Token::TyInput => Type::Input,
     }
 }
 

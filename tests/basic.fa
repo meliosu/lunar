@@ -1,5 +1,5 @@
 import c_add(int a, int b, int c);
-import c_mul(float c, value A, name B);
+import c_mul(float c, input A, output B);
 
 sub hello() {
     print(10);

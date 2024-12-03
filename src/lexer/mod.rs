@@ -42,11 +42,11 @@ pub enum Token {
     #[token("float")]
     TyFloat,
 
-    #[token("value")]
-    TyValue,
+    #[token("input")]
+    TyInput,
 
-    #[token("name")]
-    TyName,
+    #[token("output")]
+    TyOutput,
 
     #[token("(")]
     Lparen,
