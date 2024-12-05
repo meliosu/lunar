@@ -1,0 +1,14 @@
+import add(int a, int b, output res);
+import init(output data);
+import print(input data);
+
+sub main() {
+    df x, y, z;
+
+    init(x);
+    init(y);
+
+    add(x, y, z);
+
+    print(z);
+}
