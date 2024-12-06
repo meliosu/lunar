@@ -1,7 +1,0 @@
-import print(int a);
-
-sub main() {
-    for i in 0..100 {
-        print(i * 2);
-    }
-}

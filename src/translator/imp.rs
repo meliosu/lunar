@@ -6,7 +6,7 @@ use std::fmt::{write, Write};
 use chumsky::chain::Chain;
 
 use crate::ast::visit::Visit;
-use crate::ast::{self, ItemSub};
+use crate::ast::{self, ItemSub, Type};
 
 macro_rules! error {
     ($self:ident, $($args:tt)*) => {
@@ -81,6 +81,7 @@ struct BlockIf {
 struct BlockExternCall {
     symbol: ast::Ident,
     args: Vec<ast::Expr>,
+    params: Vec<ast::Param>,
 }
 
 #[derive(Clone)]
@@ -323,6 +324,7 @@ impl Translator {
         let mut wait = HashSet::new();
         let mut submit = HashSet::new();
         let mut ctx = HashMap::new();
+        let mut params = Vec::new();
 
         for (param, arg) in extern_op.params.iter().zip(&stmt.args) {
             match &param.ty {
@@ -347,6 +349,8 @@ impl Translator {
                     }
                 }
             }
+
+            params.push(param.clone());
         }
 
         Block {
@@ -358,6 +362,7 @@ impl Translator {
             ty: BlockType::ExternCall(BlockExternCall {
                 symbol: stmt.ident.clone(),
                 args: stmt.args.clone(),
+                params,
             }),
         }
     }
@@ -402,16 +407,16 @@ impl BlockGenerator {
                 let index_name = &block_for.index.name;
 
                 emit!(&mut self.out, "for (int {}=", index_name);
-                self.gen_expr(block, &block_for.lower);
+                self.gen_expr(block, &block_for.lower, Type::Int);
                 emit!(&mut self.out, "; {}<", index_name);
-                self.gen_expr(block, &block_for.upper);
+                self.gen_expr(block, &block_for.upper, Type::Int);
                 emit!(&mut self.out, "; {}++)", index_name);
                 self.gen_fork(block, &block_for.block);
             }
 
             BlockType::If(block_if) => {
                 emit!(&mut self.out, "if (");
-                self.gen_expr(block, &block_if.cond);
+                self.gen_expr(block, &block_if.cond, Type::Int);
                 emit!(&mut self.out, ")");
                 self.gen_fork(block, &block_if.then);
             }
@@ -419,8 +424,8 @@ impl BlockGenerator {
             BlockType::ExternCall(call) => {
                 emit!(&mut self.out, "{}(", call.symbol.name);
 
-                for (i, arg) in call.args.iter().enumerate() {
-                    self.gen_expr(block, &arg);
+                for ((i, arg), param) in call.args.iter().enumerate().zip(&call.params) {
+                    self.gen_expr(block, &arg, param.ty.clone());
 
                     if i < call.args.len() - 1 {
                         emit!(&mut self.out, ",");
@@ -467,7 +472,7 @@ impl BlockGenerator {
     }
 
     fn gen_ctx(&mut self, block: &Block) {
-        emit!(&mut self.out, "struct block_ctx_{} {{", block.id);
+        emit!(&mut self.out, "typedef struct {{");
 
         for (name, ty) in &block.ctx {
             let ty = match ty {
@@ -479,14 +484,14 @@ impl BlockGenerator {
             emit!(&mut self.out, "{ty} {name};",);
         }
 
-        emit!(&mut self.out, "}};");
+        emit!(&mut self.out, "}} block_ctx_{};", block.id);
     }
 
     fn gen_fork(&mut self, parent: &Block, child: &Block) {
         emit!(&mut self.out, "{{");
         emit!(
             &mut self.out,
-            "struct block_ctx_{} *child_ctx = alloc(sizeof(*child_ctx));",
+            "block_ctx_{} *child_ctx = alloc(sizeof(*child_ctx));",
             child.id
         );
 
@@ -502,7 +507,7 @@ impl BlockGenerator {
         emit!(&mut self.out, "}}");
     }
 
-    fn gen_expr(&mut self, block: &Block, expr: &ast::Expr) {
+    fn gen_expr(&mut self, block: &Block, expr: &ast::Expr, ty: Type) {
         match expr {
             ast::Expr::Ident(ident) => {
                 let name = &ident.ident.name;
@@ -511,7 +516,15 @@ impl BlockGenerator {
                 if block.local.contains(name) {
                     emit!(&mut self.out, "{name}");
                 } else if block.wait.contains(name) {
-                    emit!(&mut self.out, "cast_int(wait(ctx->{name}))");
+                    match ty {
+                        Type::Input | Type::Output => {
+                            emit!(&mut self.out, "wait(ctx->{name})");
+                        }
+
+                        _ => {
+                            emit!(&mut self.out, "cast_int(wait(ctx->{name}))");
+                        }
+                    }
                 } else {
                     emit!(&mut self.out, "ctx->{name}");
                 }
@@ -528,7 +541,7 @@ impl BlockGenerator {
             },
 
             ast::Expr::BinOp(binop) => {
-                self.gen_expr(block, &binop.lhs);
+                self.gen_expr(block, &binop.lhs, ty.clone());
 
                 let op = match &binop.op {
                     ast::Op::Add => "+",
@@ -539,7 +552,7 @@ impl BlockGenerator {
 
                 emit!(&mut self.out, "{op}");
 
-                self.gen_expr(block, &binop.rhs);
+                self.gen_expr(block, &binop.rhs, ty);
             }
         }
     }

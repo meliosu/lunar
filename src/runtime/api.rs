@@ -1,7 +1,12 @@
 #![allow(unused)]
 
 use std::ffi::c_long;
+use std::ffi::c_ulong;
 use std::ffi::c_void;
+
+use super::imp::RUNTIME;
+
+pub type Block = unsafe extern "C" fn(*mut c_void) -> Action;
 
 #[repr(C)]
 pub(super) enum Action {
@@ -10,37 +15,41 @@ pub(super) enum Action {
 }
 
 #[repr(C)]
+#[derive(Clone)]
 pub(super) struct Df {
-    id: c_long,
-    data: *mut c_void,
+    pub id: c_ulong,
+    pub ctx: usize,
 }
 
 #[no_mangle]
 extern "C" fn request(df: &mut Df) -> i32 {
-    todo!()
+    if let Some(fragment) = RUNTIME.request(df.id) {
+        *df = fragment;
+        0
+    } else {
+        -1
+    }
 }
 
 #[no_mangle]
 extern "C" fn submit(df: Df) {
-    todo!()
+    RUNTIME.submit(df);
 }
 
 #[no_mangle]
-extern "C" fn spawn(block: unsafe extern "C" fn(*mut c_void) -> Action, ctx: *mut c_void) {
-    todo!()
+extern "C" fn spawn(block: Block, ctx: usize) {
+    RUNTIME.spawn(block, ctx);
 }
 
 #[no_mangle]
 extern "C" fn wait(df: Df) -> Df {
-    todo!()
+    RUNTIME.wait(df.id)
 }
 
 #[no_mangle]
 extern "C" fn df_create() -> Df {
-    todo!()
-}
-
-extern "C" {
-    #[no_mangle]
-    pub(super) static entry: unsafe extern "C" fn(*mut c_void) -> Action;
+    Df {
+        id: RUNTIME.alloc_dfid(),
+        ctx: 0,
+    }
 }

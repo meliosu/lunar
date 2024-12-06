@@ -1,12 +1,12 @@
 #include <malloc.h>
 
-enum Action {
+typedef enum {
     WAIT,
     EXIT,
-};
+} Action;
 
 typedef struct {
-    long id;
+    unsigned long id;
     void *data;
 } df;
 
