@@ -1,4 +1,4 @@
-use std::{path::PathBuf, process::Command};
+use std::process::Command;
 
 pub fn compile(source: String, libraries: Vec<String>) -> anyhow::Result<()> {
     std::fs::write("main.c", source)?;

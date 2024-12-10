@@ -5,7 +5,7 @@ use std::{
 
 use clap::Parser;
 
-use lunar::{args::Args, compiler, lexer, parser, runtime, translator};
+use lunar::{args::Args, lexer, parser, translator};
 
 fn main() {
     let args = Args::parse();
